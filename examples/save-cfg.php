@@ -12,12 +12,13 @@ if (class_exists('\Whoops\Run')) {
 
 //create new endpoint config
 $endpoint = new Endpoint(array(
-    'name' => '',
+    'name' => 'edgeRouter',
     'protocol' => 'https',
-    'domain' => '',
+    'domain' => '192.168.1.1',
     'port' => '443',
-    'username' => '',
-    'password' => '',
+    'username' => 'ubnt',
+    'password' => 'ubnt',
+    // don't have a valid cert? set this to false
     'verify' => true
 ));
 $client   = new Client($endpoint);

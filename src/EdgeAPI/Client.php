@@ -1,25 +1,22 @@
 <?php
 namespace PrimeInc\EdgeApi;
 
-use Guzzle\Plugin\Cookie\CookieJar\ArrayCookieJar;
-use Guzzle\Plugin\Cookie\CookiePlugin;
+use \GuzzleHttp\Cookie\CookieJar;
+use \GuzzleHttp\Psr7\Request;
 
 /**
  * Super-simple, minimum abstraction EdgeOS API wrapper
  *
- * WIP - methods may change
- *
- * Requires guzzle3
+ * Requires guzzle 6.x
  *
  * @author  William James <will@prime.ms>
- * @version 0.0.1
+ * @version 0.1.0
  */
 class Client
 {
 
     protected $endpoint;
     protected $client;
-    protected $cookie;
     protected $cookieJar;
     protected $data;
 
@@ -32,26 +29,27 @@ class Client
     {
         $this->endpoint = $endpoint;
 
-        // Create or load the cookieJar
-        if (is_a($this->endpoint->getCookies(), 'Guzzle\Plugin\Cookie\CookieJar\ArrayCookieJar')) {
+        // Load or create the cookieJar
+        if (is_a($this->endpoint->getCookies(), 'GuzzleHttp\Cookie\CookieJar')) {
             $this->cookieJar = $this->endpoint->getCookies();
-            $this->cookie    = new CookiePlugin($this->cookieJar);
         } else {
-            $this->cookieJar = new ArrayCookieJar();
-            $this->cookie    = new CookiePlugin($this->cookieJar);
+            $this->cookieJar = new CookieJar();
         }
 
         // Create a client and provide a base URL
-        $this->client = new \Guzzle\Http\Client($this->endpoint->getProtocol() . '://' . $this->endpoint->getDomain() . ':' . $this->endpoint->getPort());
-        // SSL Cert check
-        $this->client->setDefaultOption('verify', $this->endpoint->getVerify());
-        // Setting the Referer is a necessary annoyance
-        $this->client->setDefaultOption('headers/Referer',
-            $this->endpoint->getProtocol() . '://' . $this->endpoint->getDomain() . ':' . $this->endpoint->getPort());
-        $this->client->setDefaultOption('headers/Accept', 'application/json');
-        $this->client->setDefaultOption('headers/X-Requested-With', 'XMLHttpRequest');
-        // Attach cookie object to client
-        $this->client->addSubscriber($this->cookie);
+        $this->client = new \GuzzleHttp\Client([
+            'base_uri' => $this->endpoint->getProtocol() . '://' . $this->endpoint->getDomain() . ':' . $this->endpoint->getPort(),
+            'headers' => [
+                // Setting the Referer is a necessary
+                'Referer' => $this->endpoint->getProtocol() . '://' . $this->endpoint->getDomain() . ':' . $this->endpoint->getPort(),
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ],
+            // SSL Cert check
+            'verify' => $this->endpoint->getVerify(),
+            // Save the cookies for authentication
+            'cookies' => $this->cookieJar
+        ]);
 
     }
 
@@ -62,7 +60,7 @@ class Client
      */
     public function get()
     {
-        $request = $this->client->get('/api/edge/get.json');
+        $request = new Request('GET', '/api/edge/get.json');
 
         return $this->getResponse($request);
     }
@@ -74,7 +72,7 @@ class Client
      */
     public function partial()
     {
-        $request = $this->client->get('/api/edge/partial.json');
+        $request = new Request('GET', '/api/edge/partial.json');
 
         return $this->getResponse($request);
     }
@@ -90,10 +88,10 @@ class Client
      */
     public function data($query)
     {
-        $request = $this->client->get('/api/edge/data.json');
-        $request->getQuery()->set('data', $query);
+        $options = ['query' => ['data' => $query]];
+        $request = new Request('GET', '/api/edge/data.json');
 
-        return $this->getResponse($request);
+        return $this->getResponse($request, $options);
     }
 
     /**
@@ -103,13 +101,22 @@ class Client
      */
     public function auth()
     {
-        // Create a POST request and add the username & password
-        $request = $this->client->post('/api/edge/auth.json', array(), array(
-            'username' => $this->endpoint->getUsername(),
-            'password' => $this->endpoint->getPassword()
-        ));
+        // Form params are no longer set on Request object, but instead on Client->send();
+        $options = [
+            'form_params' => [
+                'username' => $this->endpoint->getUsername(),
+                'password' => $this->endpoint->getPassword()
+            ],
+            // Guzzle 6.0.1 won't grab cookies when redirected
+            // Page issues both cookies on the first POST request, but also sends a 302 Redirect
+            // When Guzzle follows the redirect (via a GET request) it doesn't save the cookies from the first POST request
+            'allow_redirects' => false
+        ];
 
-        $response = $this->getResponse($request, false);
+        // Create a POST request and add the username & password
+        $request = new Request('POST', '/api/edge/auth.json');
+
+        $response = $this->getResponse($request, $options, false);
         $response = json_decode($response);
 
         if (!$response->success) {
@@ -120,11 +127,8 @@ class Client
         }
 
         // Send post request again to the login page to get the CSRF Token & an authenticated session_id (the auth.json api doesn't do this =/)
-        $request = $this->client->post('/', array(), array(
-            'username' => $this->endpoint->getUsername(),
-            'password' => $this->endpoint->getPassword()
-        ));
-        $request->send();
+        $request = new Request('POST', '/');
+        $this->getResponse($request, $options, false);
 
         $this->endpoint->setCookies($this->cookieJar);
 
@@ -139,10 +143,10 @@ class Client
      */
     public function ping()
     {
-        $request = $this->client->get('/api/edge/ping.json');
-        $request->getQuery()->set('anon', '1');
+        $options = ['query' => ['anon' => '1']];
+        $request = new Request('GET', '/api/edge/ping.json');
 
-        return $this->getResponse($request);
+        return $this->getResponse($request, $options, false);
     }
 
     /**
@@ -150,17 +154,17 @@ class Client
      *
      * @param bool $return
      *
-     * @return string
+     * @return string|void
      */
     public function save($return = true)
     {
-        $request = $this->client->get('/api/edge/config/save.json');
+        $request = new Request('GET', '/api/edge/config/save.json');
 
         $this->getResponse($request);
 
-        //add error checking..
+        // TODO: add error checking..
 
-        $request = $this->client->get('/files/config');
+        $request = new Request('GET', '/files/config');
 
         $tar = $this->getResponse($request);
 
@@ -191,9 +195,9 @@ class Client
      */
     public function heartbeat()
     {
-        $request = $this->client->get('/api/edge/heartbeat.json');
+        $request = new Request('GET', '/api/edge/heartbeat.json');
 
-        $response = json_decode($this->getResponse($request, false));
+        $response = json_decode($this->getResponse($request, [], false));
 
         if ($response->success && $response->PING && $response->SESSION) {
             return true;
@@ -203,25 +207,42 @@ class Client
     }
 
     /**
-     * @param      $request
+     * @param       $request
      *
-     * @param bool $check_auth
+     * @param bool  $check_auth
+     *
+     * @param array $options
      *
      * @return string
-     * @throws \Exception
      */
-    private function getResponse($request, $check_auth = true)
+    private function getResponse($request, $options = [], $check_auth = true)
     {
         if ($check_auth) {
-            if (!$this->heartbeat()) {
-                //throw new \Exception("Not authenticated");
-                $this->auth();
-            }
+            $this->checkAuth();
         }
-        $response   = $request->send();
+
+        $response   = $this->client->send($request, $options);
         $this->data = $response->getBody();
 
         return $this->data;
+    }
+
+    /**
+     * Checks auth state for requests that require previous authentication
+     *
+     * @return bool
+     * @throws \Exception
+     */
+    private function checkAuth()
+    {
+        if (!$this->heartbeat()) {
+            $this->auth();
+        }
+        if ($this->heartbeat()) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**

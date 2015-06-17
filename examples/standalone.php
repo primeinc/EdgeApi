@@ -4,41 +4,55 @@ require '../vendor/autoload.php';
 // This examples shows how to do this without using the class
 // Still requires Guzzle
 
-use Guzzle\Http\Client;
-use Guzzle\Plugin\Cookie\CookiePlugin;
-use Guzzle\Plugin\Cookie\CookieJar\ArrayCookieJar;
+use GuzzleHttp\Client;
+use GuzzleHttp\Cookie\CookieJar;
 
-$cookiePlugin = new CookiePlugin(new ArrayCookieJar());
+if (class_exists('\Whoops\Run')) {
+    $whoops = new \Whoops\Run;
+    $whoops->pushHandler(new \Whoops\Handler\PrettyPageHandler);
+    $whoops->register();
+}
 
-$uri      = 'https://10.0.1.1:443';
-$username = '';
-$password = '';
+$cookieJar = new CookieJar();
+
+$uri      = 'https://192.168.1.1:443';
+$username = 'ubnt';
+$password = 'ubnt';
 
 // Create a client and provide a base URL
-$client = new Client($uri);
-// Ignore Invalid SSL Cert
-$client->setDefaultOption('verify', false);
-// Setting the Referer is a necessary annoyance
-$client->setDefaultOption('headers/Referer', $uri);
-// These are optional
-$client->setDefaultOption('headers/Accept', 'application/json');
-$client->setDefaultOption('headers/X-Requested-With', 'XMLHttpRequest');
-// Add the cookie plugin to a client
-$client->addSubscriber($cookiePlugin);
+$client = new Client([
+    'base_uri' => $uri,
+    'headers' => [
+        // Setting the Referer is a necessary annoyance
+        'Referer' => $uri,
+        'Accept' => 'application/json',
+        'X-Requested-With' => 'XMLHttpRequest',
+    ],
+    // Ignore Invalid SSL Cert
+    'verify' => false,
+    // Save the cookies for authentication
+    'cookies' => $cookieJar
+]);
 
 // Create a POST request and add the username & password
-$request  = $client->post('/', array(), array(
-    'username' => $username,
-    'password' => $password
-));
-$response = $request->send();
+$response = $client->post('/', [
+    'form_params' => [
+        'username' => $username,
+        'password' => $password
+    ],
+    // Guzzle 6.0.1 won't grab cookies when redirected
+    // Page issues both cookies on the first POST request, but also sends a 302 Redirect
+    // When Guzzle follows the redirect (via a GET request) it doesn't save the cookies from the first POST request
+    'allow_redirects' => false
+]);
 
 // Assuming valid auth - you'll get a guzzle 403 exception if its not valid
 
 // Request get.json which requires auth session
-$request  = $client->get('/api/edge/get.json');
-$response = $request->send();
+$response = $client->get('/api/edge/get.json');
+$data     = $response->getBody();
 
-$data = $response->json();
+$data = json_decode($data);
 
-echo json_encode($data);
+echo '<pre>';
+echo json_encode($data, JSON_PRETTY_PRINT);

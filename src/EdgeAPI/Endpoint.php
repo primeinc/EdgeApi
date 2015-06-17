@@ -6,11 +6,13 @@
 
 namespace PrimeInc\EdgeApi;
 
-use Guzzle\Plugin\Cookie\Cookie;
-use Guzzle\Plugin\Cookie\CookieJar\ArrayCookieJar;
+use GuzzleHttp\Cookie\CookieJar;
 
 /**
  * Set-Endpoint object
+ *
+ * @author  William James <will@prime.ms>
+ * @version 0.1.0
  */
 class Endpoint
 {
@@ -74,7 +76,7 @@ class Endpoint
     /**
      * Get the CookieJar
      *
-     * @return ArrayCookieJar|null
+     * @return CookieJar|null
      */
     public function getCookies()
     {
@@ -84,7 +86,7 @@ class Endpoint
     /**
      * Set the CookieJar
      *
-     * @param ArrayCookieJar $cookies
+     * @param CookieJar|string $cookies
      *
      * @return Endpoint
      */
@@ -94,37 +96,24 @@ class Endpoint
     }
 
     /**
-     * @param ArrayCookieJar $cookieJar
+     * @param CookieJar $cookieJar
      *
      * @return string
      */
-    public function serializeCookies(ArrayCookieJar $cookieJar)
+    public function serializeCookies(CookieJar $cookieJar)
     {
-        return json_encode(array_map(function (Cookie $cookie) {
-            return $cookie->toArray();
-        }, $cookieJar->all(null, null, null, false, false)));
+        return serialize($cookieJar->toArray());
     }
 
     /**
      * @param $data
      *
-     * @return ArrayCookieJar
+     * @return CookieJar
      */
     public function unserializeCookies($data)
     {
-        $data = json_decode($data, true);
-        if (empty($data)) {
-            $serial_cookies = array();
-        } else {
-            $serial_cookies = array_map(function (array $cookie) {
-                return new Cookie($cookie);
-            }, $data);
-        }
-
-        $cookieJar = new ArrayCookieJar();
-        foreach ($serial_cookies as $cookie) {
-            $cookieJar->add($cookie);
-        }
+        $cookieJar = new CookieJar();
+        $cookieJar->fromArray(unserialize($data), $this->getDomain());
 
         return $cookieJar;
     }

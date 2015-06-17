@@ -2,8 +2,16 @@
   "name": "primeinc/edgeapi",
   "description": "A PHP wrapper for the EdgeOS API",
   "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "William James",
+      "email": "will@prime.ms"
+    }
+  ],
   "require": {
-    "guzzle/guzzle": "^3.9"
+    "php": ">=5.5.0",
+    "guzzlehttp/guzzle": "6.0.1"
   },
   "require-dev": {
     "filp/whoops": "^1.1"
@@ -11,11 +19,9 @@
   "autoload": {
     "psr-4": {"PrimeInc\\": "src/"}
   },
-  "license": "MIT",
-  "authors": [
-    {
-      "name": "William James",
-      "email": "will@prime.ms"
+  "extra": {
+    "branch-alias": {
+      "dev-master": "0.1.x-dev"
     }
-  ]
+  }
 }
