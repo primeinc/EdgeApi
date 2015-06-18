@@ -1,8 +1,4 @@
 <?php
-/**
- * Date: 6/14/2015
- * Time: 8:26 PM
- */
 
 namespace PrimeInc\EdgeApi;
 
@@ -57,7 +53,9 @@ class Endpoint
     {
         $cookieJar = $this->getCookies();
 
-        $this->setCookies($this->serializeCookies($cookieJar));
+        if (!is_null($cookieJar)) {
+            $this->setCookies($this->serializeCookies($cookieJar));
+        }
 
         return array('data');
     }
@@ -278,7 +276,7 @@ class Endpoint
      * Set a value and return the endpoint object
      *
      * @param string $key   Key to set
-     * @param string $value Value to set
+     * @param mixed  $value Value to set
      *
      * @return Endpoint
      */
